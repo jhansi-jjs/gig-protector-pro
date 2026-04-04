@@ -7,6 +7,7 @@ import { useAppStore } from "@/lib/store";
 import { processClaim } from "@/lib/insurance-engine";
 import type { DisruptionType, Claim } from "@/lib/types";
 import PayoutAnimation from "@/components/PayoutAnimation";
+import SimulationFlow from "@/components/SimulationFlow";
 
 const TRIGGERS: { type: DisruptionType; icon: React.ReactNode; label: string; threshold: string; color: string }[] = [
   { type: "Heavy Rain", icon: <CloudRain className="h-5 w-5" />, label: "Heavy Rain", threshold: ">15mm/hr", color: "bg-shield-blue/10 text-shield-blue" },
@@ -78,6 +79,9 @@ export default function Dashboard() {
         </div>
         <p className="text-primary-foreground/80 text-sm">Welcome back, {user.name.split(" ")[0]}!</p>
         <p className="text-primary-foreground text-xs mt-1 opacity-70">{user.platform} · {user.city} · Risk Score: {user.riskScore}</p>
+        <p className="text-primary-foreground font-display font-bold text-sm mt-3 tracking-wide">
+          No claims. No forms. Instant protection.
+        </p>
       </div>
 
       {/* Policy Card */}
@@ -108,32 +112,8 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* Trigger Section */}
-      <div className="px-4 mb-6">
-        <h3 className="font-display font-semibold text-sm mb-3 flex items-center gap-1.5">
-          <AlertTriangle className="h-4 w-4 text-primary" /> Simulate Disruption
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {TRIGGERS.map((t) => (
-            <Button
-              key={t.type}
-              variant="outline"
-              disabled={processing !== null}
-              onClick={() => handleTrigger(t.type)}
-              className={`h-auto py-3 px-3 flex flex-col items-start gap-1 border ${processing === t.type ? "animate-pulse border-primary" : ""}`}
-            >
-              <div className={`p-1.5 rounded ${t.color}`}>{t.icon}</div>
-              <span className="text-xs font-semibold text-foreground">{t.label}</span>
-              <span className="text-[10px] text-muted-foreground">{t.threshold}</span>
-            </Button>
-          ))}
-        </div>
-        {processing && (
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center text-xs text-primary font-medium mt-3">
-            🔍 Detecting {processing}... Evaluating claim...
-          </motion.p>
-        )}
-      </div>
+      {/* Simulation Flow */}
+      <SimulationFlow />
 
       {/* Claims History */}
       <div className="px-4">
