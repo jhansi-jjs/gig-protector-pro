@@ -1,21 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, CloudRain, Thermometer, Wind, Megaphone, Wifi, CheckCircle2, AlertTriangle, XCircle, Clock, ArrowRight, BarChart3, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Shield, CheckCircle2, AlertTriangle, XCircle, Clock, BarChart3, LogOut } from "lucide-react";
 import { useAppStore } from "@/lib/store";
-import { processClaim } from "@/lib/insurance-engine";
-import type { DisruptionType, Claim } from "@/lib/types";
+import type { Claim } from "@/lib/types";
 import PayoutAnimation from "@/components/PayoutAnimation";
 import SimulationFlow from "@/components/SimulationFlow";
-
-const TRIGGERS: { type: DisruptionType; icon: React.ReactNode; label: string; threshold: string; color: string }[] = [
-  { type: "Heavy Rain", icon: <CloudRain className="h-5 w-5" />, label: "Heavy Rain", threshold: ">15mm/hr", color: "bg-shield-blue/10 text-shield-blue" },
-  { type: "Extreme Heat", icon: <Thermometer className="h-5 w-5" />, label: "Extreme Heat", threshold: ">42°C 3hrs", color: "bg-shield-red/10 text-shield-red" },
-  { type: "High AQI", icon: <Wind className="h-5 w-5" />, label: "High AQI", threshold: "AQI >300", color: "bg-shield-amber/10 text-shield-amber" },
-  { type: "Civic Strike", icon: <Megaphone className="h-5 w-5" />, label: "Civic Strike", threshold: "Zone lockdown", color: "bg-primary/10 text-primary" },
-  { type: "Platform Outage", icon: <Wifi className="h-5 w-5" />, label: "Platform Outage", threshold: ">2hr downtime", color: "bg-destructive/10 text-destructive" },
-];
+import EarningsChart from "@/components/EarningsChart";
+import RiskForecast from "@/components/RiskForecast";
+import CoverageInfo from "@/components/CoverageInfo";
+import PayoutTimeline from "@/components/PayoutTimeline";
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
   approved: { icon: <CheckCircle2 className="h-4 w-4" />, label: "Approved", className: "text-shield-green" },
@@ -27,8 +21,7 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; clas
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, policy, claims, addClaim, markClaimPaid, setPayoutAnimating, payoutAnimating, lastPayout, reset } = useAppStore();
-  const [processing, setProcessing] = useState<DisruptionType | null>(null);
+  const { user, policy, claims, payoutAnimating, lastPayout, reset } = useAppStore();
 
   if (!user || !policy) {
     navigate("/");
@@ -36,24 +29,7 @@ export default function Dashboard() {
   }
 
   const totalPaid = claims.filter((c) => c.status === "paid" || c.status === "approved").reduce((s, c) => s + c.finalPayout, 0);
-
-  const handleTrigger = async (type: DisruptionType) => {
-    setProcessing(type);
-    // Simulate processing delay
-    await new Promise((r) => setTimeout(r, 1500));
-    const claim = processClaim(user, policy, type);
-    addClaim(claim);
-    setProcessing(null);
-
-    if (claim.finalPayout > 0 && (claim.status === "approved" || claim.status === "partial")) {
-      // Simulate payout
-      setTimeout(() => {
-        markClaimPaid(claim.id);
-        setPayoutAnimating(true, claim.finalPayout);
-        setTimeout(() => setPayoutAnimating(false), 3000);
-      }, 800);
-    }
-  };
+  const renewalDate = new Date(policy.coverageEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -96,24 +72,40 @@ export default function Dashboard() {
             Active
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-4 gap-2 mt-4">
           <div className="text-center">
-            <p className="text-xs text-muted-foreground">Premium</p>
-            <p className="font-display font-bold text-foreground">₹{policy.weeklyPremium}<span className="text-xs font-normal text-muted-foreground">/wk</span></p>
+            <p className="text-[10px] text-muted-foreground">Premium</p>
+            <p className="font-display font-bold text-sm text-foreground">₹{policy.weeklyPremium}<span className="text-[10px] font-normal text-muted-foreground">/wk</span></p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-muted-foreground">Max Payout</p>
-            <p className="font-display font-bold text-foreground">₹{policy.maxPayoutPerDay}<span className="text-xs font-normal text-muted-foreground">/day</span></p>
+            <p className="text-[10px] text-muted-foreground">Max Payout</p>
+            <p className="font-display font-bold text-sm text-foreground">₹{policy.maxPayoutPerDay}<span className="text-[10px] font-normal text-muted-foreground">/day</span></p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-muted-foreground">Protected</p>
-            <p className="font-display font-bold text-shield-green">₹{totalPaid}</p>
+            <p className="text-[10px] text-muted-foreground">Protected</p>
+            <p className="font-display font-bold text-sm text-shield-green">₹{totalPaid}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-muted-foreground">Renews</p>
+            <p className="font-display font-bold text-sm text-foreground">{renewalDate}</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Simulation Flow */}
+      {/* Simulation Flow — All 5 disruption types */}
       <SimulationFlow />
+
+      {/* Earnings Chart */}
+      <EarningsChart />
+
+      {/* Payout Timeline */}
+      <PayoutTimeline />
+
+      {/* 7-Day Risk Forecast */}
+      <RiskForecast />
+
+      {/* Coverage & Exclusions */}
+      <CoverageInfo />
 
       {/* Claims History */}
       <div className="px-4">
