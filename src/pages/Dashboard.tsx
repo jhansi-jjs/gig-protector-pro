@@ -79,6 +79,9 @@ export default function Dashboard() {
         </div>
         <p className="text-primary-foreground/80 text-sm">Welcome back, {user.name.split(" ")[0]}!</p>
         <p className="text-primary-foreground text-xs mt-1 opacity-70">{user.platform} · {user.city} · Risk Score: {user.riskScore}</p>
+        <p className="text-primary-foreground font-display font-bold text-sm mt-3 tracking-wide">
+          No claims. No forms. Instant protection.
+        </p>
       </div>
 
       {/* Policy Card */}
