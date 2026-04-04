@@ -1,11 +1,69 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CloudRain, Bot, ShieldCheck, Banknote, ArrowRight, Radio, FileX, FileCheck, Zap } from "lucide-react";
+import { CloudRain, Bot, ShieldCheck, Banknote, ArrowRight, Radio, FileX, FileCheck, Zap, Thermometer, Wind, Megaphone, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/store";
 import { processClaim } from "@/lib/insurance-engine";
+import type { DisruptionType } from "@/lib/types";
+import { toast } from "sonner";
 
 type Step = "idle" | "detecting" | "analyzing" | "fraud" | "payout";
+
+const DISRUPTION_OPTIONS: {
+  type: DisruptionType;
+  icon: React.ReactNode;
+  label: string;
+  emoji: string;
+  threshold: string;
+  color: string;
+  detectMsg: string;
+}[] = [
+  {
+    type: "Heavy Rain",
+    icon: <CloudRain className="h-5 w-5" />,
+    label: "Heavy Rain",
+    emoji: "🌧",
+    threshold: ">15mm/hr",
+    color: "bg-shield-blue/10 text-shield-blue border-shield-blue/30",
+    detectMsg: "Heavy Rain detected in your zone",
+  },
+  {
+    type: "Extreme Heat",
+    icon: <Thermometer className="h-5 w-5" />,
+    label: "Extreme Heat",
+    emoji: "🔥",
+    threshold: ">42°C 3hrs",
+    color: "bg-shield-red/10 text-shield-red border-shield-red/30",
+    detectMsg: "Extreme Heat alert in your zone",
+  },
+  {
+    type: "High AQI",
+    icon: <Wind className="h-5 w-5" />,
+    label: "High AQI",
+    emoji: "💨",
+    threshold: "AQI >300",
+    color: "bg-shield-amber/10 text-shield-amber border-shield-amber/30",
+    detectMsg: "Hazardous AQI levels detected",
+  },
+  {
+    type: "Civic Strike",
+    icon: <Megaphone className="h-5 w-5" />,
+    label: "Civic Strike",
+    emoji: "📢",
+    threshold: "Zone lockdown",
+    color: "bg-primary/10 text-primary border-primary/30",
+    detectMsg: "Civic strike / bandh declared in your zone",
+  },
+  {
+    type: "Platform Outage",
+    icon: <Wifi className="h-5 w-5" />,
+    label: "Platform Outage",
+    emoji: "📡",
+    threshold: ">2hr downtime",
+    color: "bg-destructive/10 text-destructive border-destructive/30",
+    detectMsg: "Platform outage detected (>2hrs)",
+  },
+];
 
 function LiveTimer() {
   const [seconds, setSeconds] = useState(2);
@@ -19,18 +77,26 @@ function LiveTimer() {
 export default function SimulationFlow() {
   const { user, policy, addClaim, markClaimPaid, setPayoutAnimating } = useAppStore();
   const [step, setStep] = useState<Step>("idle");
+  const [activeDisruption, setActiveDisruption] = useState<typeof DISRUPTION_OPTIONS[0] | null>(null);
   const [claimResult, setClaimResult] = useState<{
     expected: number;
     actual: number;
     loss: number;
     payout: number;
+    status: string;
   } | null>(null);
 
   if (!user || !policy) return null;
 
   const isTriggered = step !== "idle";
 
-  const runSimulation = async () => {
+  const runSimulation = async (disruption: typeof DISRUPTION_OPTIONS[0]) => {
+    setActiveDisruption(disruption);
+    
+    toast.info(`${disruption.emoji} ${disruption.type} detected!`, {
+      description: `Parametric trigger fired — processing your claim automatically...`,
+    });
+
     setStep("detecting");
     await new Promise((r) => setTimeout(r, 1200));
     setStep("analyzing");
@@ -38,7 +104,7 @@ export default function SimulationFlow() {
     setStep("fraud");
     await new Promise((r) => setTimeout(r, 1000));
 
-    const claim = processClaim(user, policy, "Heavy Rain");
+    const claim = processClaim(user, policy, disruption.type);
     addClaim(claim);
 
     setClaimResult({
@@ -46,30 +112,42 @@ export default function SimulationFlow() {
       actual: claim.actualEarnings,
       loss: Math.max(0, claim.expectedEarnings - claim.actualEarnings),
       payout: claim.finalPayout,
+      status: claim.status,
     });
     setStep("payout");
 
     if (claim.finalPayout > 0 && (claim.status === "approved" || claim.status === "partial")) {
+      toast.success(`₹${claim.finalPayout} credited to your UPI!`, {
+        description: "No claim filed. Fully automated payout.",
+      });
       setTimeout(() => {
         markClaimPaid(claim.id);
         setPayoutAnimating(true, claim.finalPayout);
         setTimeout(() => setPayoutAnimating(false), 3000);
       }, 600);
+    } else if (claim.status === "rejected") {
+      toast.error("Claim rejected", {
+        description: "Fraud detection flagged this claim.",
+      });
     }
   };
 
   const reset = () => {
     setStep("idle");
     setClaimResult(null);
+    setActiveDisruption(null);
   };
 
   const stepOrder: Exclude<Step, "idle">[] = ["detecting", "analyzing", "fraud", "payout"];
   const currentIdx = step === "idle" ? -1 : stepOrder.indexOf(step as Exclude<Step, "idle">);
 
   const STEPS_CONFIG: Record<Exclude<Step, "idle">, { icon: React.ReactNode; text: string }> = {
-    detecting: { icon: <CloudRain className="h-5 w-5" />, text: "🌧 Heavy Rain detected in your zone" },
-    analyzing: { icon: <Bot className="h-5 w-5" />, text: "🤖 AI analyzing risk..." },
-    fraud: { icon: <ShieldCheck className="h-5 w-5" />, text: "✅ Fraud check passed" },
+    detecting: {
+      icon: activeDisruption?.icon || <CloudRain className="h-5 w-5" />,
+      text: `${activeDisruption?.emoji || "🌧"} ${activeDisruption?.detectMsg || "Disruption detected"}`,
+    },
+    analyzing: { icon: <Bot className="h-5 w-5" />, text: "🤖 AI analyzing risk & earnings impact..." },
+    fraud: { icon: <ShieldCheck className="h-5 w-5" />, text: "✅ Fraud check passed — Dual-key verified" },
     payout: { icon: <Banknote className="h-5 w-5" />, text: "💸 Payout processed!" },
   };
 
@@ -99,11 +177,11 @@ export default function SimulationFlow() {
           </span>
           <span className="text-sm font-semibold text-foreground">
             {isTriggered
-              ? "🔴 Disruption detected: Heavy Rain"
+              ? `🔴 Disruption detected: ${activeDisruption?.label || "Unknown"}`
               : `🟡 Monitoring your zone (${user.city})`}
           </span>
         </div>
-        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+        <span className="text-[11px] text-muted-foreground whitespace-nowrap ml-2">
           Last checked: <LiveTimer />
         </span>
       </motion.div>
@@ -115,15 +193,31 @@ export default function SimulationFlow() {
       </h3>
 
       {step === "idle" ? (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <Button
-            onClick={runSimulation}
-            className="w-full h-16 text-lg font-bold rounded-xl gradient-hero text-primary-foreground shadow-elevated hover:opacity-90 transition-opacity"
-          >
-            <CloudRain className="h-6 w-6 mr-2" />
-            🌧 Heavy Rain (Simulate)
-          </Button>
-        </motion.div>
+        <div className="space-y-2">
+          {/* Primary buttons grid */}
+          <div className="grid grid-cols-2 gap-2">
+            {DISRUPTION_OPTIONS.map((d) => (
+              <motion.div
+                key={d.type}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <Button
+                  onClick={() => runSimulation(d)}
+                  variant="outline"
+                  className={`w-full h-auto py-3 px-3 flex flex-col items-center gap-1.5 rounded-xl border-2 hover:scale-[1.02] transition-transform ${d.color}`}
+                >
+                  <span className="text-lg">{d.emoji}</span>
+                  <span className="font-semibold text-xs">{d.label}</span>
+                  <span className="text-[10px] opacity-70">{d.threshold}</span>
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground text-center mt-1">
+            Tap any disruption to simulate a parametric trigger
+          </p>
+        </div>
       ) : (
         <div className="space-y-2.5">
           {/* Step-by-step progress */}
@@ -166,87 +260,111 @@ export default function SimulationFlow() {
                 initial={{ opacity: 0, scale: 0.92, y: 24 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ type: "spring", damping: 16, delay: 0.15 }}
-                className="mt-2 rounded-2xl gradient-success p-6 text-accent-foreground shadow-elevated"
+                className={`mt-2 rounded-2xl p-6 shadow-elevated ${
+                  claimResult.status === "rejected"
+                    ? "bg-destructive/10 border border-destructive/30 text-foreground"
+                    : "gradient-success text-accent-foreground"
+                }`}
               >
-                {/* Large payout */}
-                <div className="text-center mb-5">
-                  <motion.p
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="text-sm font-medium opacity-80"
-                  >
-                    💸
-                  </motion.p>
-                  <motion.p
-                    initial={{ scale: 0.6, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.35, type: "spring", damping: 10 }}
-                    className="font-display text-6xl font-extrabold tracking-tight my-1"
-                  >
-                    ₹{claimResult.payout}
-                  </motion.p>
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                    className="text-base font-semibold opacity-90"
-                  >
-                    Credited Instantly
-                  </motion.p>
-                </div>
-
-                {/* Earnings breakdown */}
-                <div className="space-y-2 text-sm bg-accent-foreground/5 rounded-xl p-4">
-                  <div className="flex justify-between opacity-90">
-                    <span>Expected Earnings</span>
-                    <span className="font-semibold">₹{claimResult.expected}</span>
+                {claimResult.status === "rejected" ? (
+                  <div className="text-center py-4">
+                    <p className="text-3xl mb-2">🚫</p>
+                    <p className="font-display text-xl font-bold">Claim Rejected</p>
+                    <p className="text-sm opacity-70 mt-2">Fraud detection flagged this claim. No payout issued.</p>
                   </div>
-                  <div className="flex justify-between opacity-90">
-                    <span>Actual Earnings</span>
-                    <span className="font-semibold">₹{claimResult.actual}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-accent-foreground/15 pt-2 font-bold text-base">
-                    <span>Loss Covered</span>
-                    <span>₹{claimResult.loss}</span>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    {/* Large payout */}
+                    <div className="text-center mb-5">
+                      <motion.p
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-sm font-medium opacity-80"
+                      >
+                        💸
+                      </motion.p>
+                      <motion.p
+                        initial={{ scale: 0.6, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ delay: 0.35, type: "spring", damping: 10 }}
+                        className="font-display text-6xl font-extrabold tracking-tight my-1"
+                      >
+                        ₹{claimResult.payout}
+                      </motion.p>
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.5 }}
+                        className="text-base font-semibold opacity-90"
+                      >
+                        Credited Instantly
+                      </motion.p>
+                      {claimResult.status === "partial" && (
+                        <motion.p
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.55 }}
+                          className="text-xs opacity-70 mt-1"
+                        >
+                          (Partial payout — 60% released, 40% pending verification)
+                        </motion.p>
+                      )}
+                    </div>
 
-                {/* AI Explanation */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                  className="mt-4 bg-accent-foreground/5 rounded-xl p-4 text-sm leading-relaxed space-y-1"
-                >
-                  <p className="font-semibold flex items-center gap-1.5 mb-2">
-                    <Bot className="h-4 w-4" /> AI Explanation
-                  </p>
-                  <p className="opacity-85">Rainfall exceeded threshold (15mm/hr)</p>
-                  <p className="opacity-85">Your earnings dropped significantly</p>
-                  <p className="opacity-85">→ Compensation triggered automatically</p>
-                </motion.div>
+                    {/* Earnings breakdown */}
+                    <div className="space-y-2 text-sm bg-accent-foreground/5 rounded-xl p-4">
+                      <div className="flex justify-between opacity-90">
+                        <span>Expected Earnings</span>
+                        <span className="font-semibold">₹{claimResult.expected}</span>
+                      </div>
+                      <div className="flex justify-between opacity-90">
+                        <span>Actual Earnings</span>
+                        <span className="font-semibold">₹{claimResult.actual}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-accent-foreground/15 pt-2 font-bold text-base">
+                        <span>Loss Covered</span>
+                        <span>₹{claimResult.loss}</span>
+                      </div>
+                    </div>
 
-                {/* Trust signals */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.75 }}
-                  className="mt-4 flex gap-2 flex-wrap"
-                >
-                  {[
-                    { icon: <FileX className="h-3.5 w-3.5" />, text: "No claim filed" },
-                    { icon: <FileCheck className="h-3.5 w-3.5" />, text: "No documents needed" },
-                    { icon: <Zap className="h-3.5 w-3.5" />, text: "Fully automated" },
-                  ].map((t) => (
-                    <span
-                      key={t.text}
-                      className="flex items-center gap-1.5 bg-accent-foreground/10 text-accent-foreground text-xs font-medium px-3 py-1.5 rounded-full"
+                    {/* AI Explanation */}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.6 }}
+                      className="mt-4 bg-accent-foreground/5 rounded-xl p-4 text-sm leading-relaxed space-y-1"
                     >
-                      {t.icon} {t.text}
-                    </span>
-                  ))}
-                </motion.div>
+                      <p className="font-semibold flex items-center gap-1.5 mb-2">
+                        <Bot className="h-4 w-4" /> AI Explanation
+                      </p>
+                      <p className="opacity-85">{activeDisruption?.type} exceeded threshold ({activeDisruption?.threshold})</p>
+                      <p className="opacity-85">Your earnings dropped significantly</p>
+                      <p className="opacity-85">→ Compensation triggered automatically</p>
+                    </motion.div>
+
+                    {/* Trust signals */}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.75 }}
+                      className="mt-4 flex gap-2 flex-wrap"
+                    >
+                      {[
+                        { icon: <FileX className="h-3.5 w-3.5" />, text: "No claim filed" },
+                        { icon: <FileCheck className="h-3.5 w-3.5" />, text: "No documents needed" },
+                        { icon: <Zap className="h-3.5 w-3.5" />, text: "Fully automated" },
+                      ].map((t) => (
+                        <span
+                          key={t.text}
+                          className="flex items-center gap-1.5 bg-accent-foreground/10 text-accent-foreground text-xs font-medium px-3 py-1.5 rounded-full"
+                        >
+                          {t.icon} {t.text}
+                        </span>
+                      ))}
+                    </motion.div>
+                  </>
+                )}
 
                 <Button
                   onClick={reset}
