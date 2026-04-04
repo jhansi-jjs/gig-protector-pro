@@ -112,32 +112,8 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* Trigger Section */}
-      <div className="px-4 mb-6">
-        <h3 className="font-display font-semibold text-sm mb-3 flex items-center gap-1.5">
-          <AlertTriangle className="h-4 w-4 text-primary" /> Simulate Disruption
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {TRIGGERS.map((t) => (
-            <Button
-              key={t.type}
-              variant="outline"
-              disabled={processing !== null}
-              onClick={() => handleTrigger(t.type)}
-              className={`h-auto py-3 px-3 flex flex-col items-start gap-1 border ${processing === t.type ? "animate-pulse border-primary" : ""}`}
-            >
-              <div className={`p-1.5 rounded ${t.color}`}>{t.icon}</div>
-              <span className="text-xs font-semibold text-foreground">{t.label}</span>
-              <span className="text-[10px] text-muted-foreground">{t.threshold}</span>
-            </Button>
-          ))}
-        </div>
-        {processing && (
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center text-xs text-primary font-medium mt-3">
-            🔍 Detecting {processing}... Evaluating claim...
-          </motion.p>
-        )}
-      </div>
+      {/* Simulation Flow */}
+      <SimulationFlow />
 
       {/* Claims History */}
       <div className="px-4">
