@@ -7,6 +7,7 @@ import { useAppStore } from "@/lib/store";
 import { processClaim } from "@/lib/insurance-engine";
 import type { DisruptionType, Claim } from "@/lib/types";
 import PayoutAnimation from "@/components/PayoutAnimation";
+import SimulationFlow from "@/components/SimulationFlow";
 
 const TRIGGERS: { type: DisruptionType; icon: React.ReactNode; label: string; threshold: string; color: string }[] = [
   { type: "Heavy Rain", icon: <CloudRain className="h-5 w-5" />, label: "Heavy Rain", threshold: ">15mm/hr", color: "bg-shield-blue/10 text-shield-blue" },
