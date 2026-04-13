@@ -4,12 +4,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Shield, CheckCircle2, AlertTriangle, XCircle, Clock, BarChart3, LogOut } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import type { Claim } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import PayoutAnimation from "@/components/PayoutAnimation";
 import SimulationFlow from "@/components/SimulationFlow";
 import EarningsChart from "@/components/EarningsChart";
 import RiskForecast from "@/components/RiskForecast";
 import CoverageInfo from "@/components/CoverageInfo";
 import PayoutTimeline from "@/components/PayoutTimeline";
+import { getAllPlanOptions } from "@/lib/insurance-engine";
+import { toast } from "sonner";
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
   approved: { icon: <CheckCircle2 className="h-4 w-4" />, label: "Approved", className: "text-shield-green" },
@@ -21,7 +24,7 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; clas
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, policy, claims, payoutAnimating, lastPayout, lastPayoutDestination, reset } = useAppStore();
+  const { user, policy, claims, payoutAnimating, lastPayout, lastPayoutDestination, reset, setPolicy } = useAppStore();
 
   if (!user) {
     return <Navigate to="/" replace />;
@@ -31,6 +34,17 @@ export default function Dashboard() {
   const renewalDate = policy
     ? new Date(policy.coverageEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
     : "--";
+
+  const assignRandomPlanForTesting = async () => {
+    try {
+      const plans = await getAllPlanOptions(user);
+      const randomPlan = plans[Math.floor(Math.random() * plans.length)];
+      setPolicy(randomPlan);
+      toast.success(`Test plan selected: ${randomPlan.tier}`);
+    } catch {
+      toast.error("Unable to assign random test plan right now.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -102,6 +116,13 @@ export default function Dashboard() {
             >
               Choose Plan Now
             </button>
+            <Button
+              variant="outline"
+              className="w-full mt-3 h-8 text-xs"
+              onClick={() => void assignRandomPlanForTesting()}
+            >
+              Quick Test: Assign Random Plan
+            </Button>
           </div>
         )}
       </motion.div>

@@ -71,7 +71,7 @@ const DISRUPTION_OPTIONS: {
 function LiveTimer() {
   const [seconds, setSeconds] = useState(2);
   useEffect(() => {
-    const iv = setInterval(() => setSeconds((s) => (s >= 10 ? 2 : s + 1)), 1000);
+    const iv = setInterval(() => setSeconds((s) => (s >= 59 ? 1 : s + 1)), 1000);
     return () => clearInterval(iv);
   }, []);
   return <span>{seconds} sec ago</span>;

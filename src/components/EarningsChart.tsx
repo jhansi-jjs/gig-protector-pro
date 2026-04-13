@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useAppStore } from "@/lib/store";
 import { TrendingUp } from "lucide-react";
+import { fetchWeeklyEarningsFromApi } from "@/lib/api";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -20,10 +22,29 @@ function generateWeeklyData(avgDaily: number, totalProtected: number) {
 
 export default function EarningsChart() {
   const { user, claims } = useAppStore();
+  const [dbData, setDbData] = useState<{ day: string; earned: number; protected: number }[] | null>(null);
   if (!user) return null;
 
   const totalProtected = claims.filter((c) => c.status === "paid" || c.status === "approved").reduce((s, c) => s + c.finalPayout, 0);
-  const data = generateWeeklyData(user.avgDailyEarnings, totalProtected);
+  const fallbackData = useMemo(
+    () => generateWeeklyData(user.avgDailyEarnings, totalProtected),
+    [user.avgDailyEarnings, totalProtected]
+  );
+  const data = dbData ?? fallbackData;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const response = await fetchWeeklyEarningsFromApi(user.id);
+      if (!cancelled && response && response.length > 0) {
+        setDbData(response);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
 
   return (
     <div className="px-4 mb-6">
@@ -58,7 +79,7 @@ export default function EarningsChart() {
           </BarChart>
         </ResponsiveContainer>
         <p className="text-[11px] text-muted-foreground text-center mt-2">
-          Green bars show income protected by ShieldRun during disruptions
+          {dbData ? "Showing weekly earnings from database records" : "Green bars show income protected by ShieldRun during disruptions"}
         </p>
       </div>
     </div>

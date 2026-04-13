@@ -22,7 +22,25 @@ export interface DynamicPricingContext {
   weatherRisk: number;
 }
 
+export interface WeeklyEarningsPoint {
+  day: string;
+  earned: number;
+  protected: number;
+}
+
 export async function fetchPlanCatalog(): Promise<Record<PlanTier, { basePremium: number; maxPayout: number }>> {
+  const backendBaseUrl = import.meta.env.VITE_BACKEND_API_URL;
+  if (backendBaseUrl) {
+    try {
+      const response = await fetch(`${backendBaseUrl}/pricing/plans`);
+      if (!response.ok) throw new Error(`Failed backend plans: ${response.status}`);
+      const data = await response.json();
+      return data as Record<PlanTier, { basePremium: number; maxPayout: number }>;
+    } catch {
+      // Fall back to client-side/default sources when backend is unavailable.
+    }
+  }
+
   const apiUrl = import.meta.env.VITE_PRICING_API_URL;
   if (!apiUrl) return DEFAULT_PLAN_CATALOG;
 
@@ -37,6 +55,22 @@ export async function fetchPlanCatalog(): Promise<Record<PlanTier, { basePremium
 }
 
 export async function fetchDynamicPricingContext(city: City): Promise<DynamicPricingContext> {
+  const backendBaseUrl = import.meta.env.VITE_BACKEND_API_URL;
+  if (backendBaseUrl) {
+    try {
+      const response = await fetch(`${backendBaseUrl}/pricing/context?city=${encodeURIComponent(city)}`);
+      if (!response.ok) throw new Error(`Failed backend context: ${response.status}`);
+      const data = await response.json();
+      return {
+        zoneMultiplier: Number(data.zoneMultiplier ?? 1.08),
+        seasonFactor: Number(data.seasonFactor ?? getSeasonFactorFromMonth(new Date().getMonth())),
+        weatherRisk: Number(data.weatherRisk ?? 0.35),
+      };
+    } catch {
+      // Fall back to open weather source below.
+    }
+  }
+
   const location = CITY_COORDS[city];
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,precipitation,weather_code`;
 
@@ -63,6 +97,26 @@ export async function fetchDynamicPricingContext(city: City): Promise<DynamicPri
 }
 
 export async function fetchRiskScoreFromApi(user: UserProfile): Promise<number> {
+  const backendBaseUrl = import.meta.env.VITE_BACKEND_API_URL;
+  if (backendBaseUrl) {
+    try {
+      const response = await fetch(`${backendBaseUrl}/risk/score`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          city: user.city,
+          workingHoursPerDay: user.workingHoursPerDay,
+          loyaltyDiscount: user.loyaltyDiscount,
+        }),
+      });
+      if (!response.ok) throw new Error(`Failed backend risk score: ${response.status}`);
+      const data = await response.json();
+      return Math.round(Math.max(0, Math.min(100, Number(data.riskScore ?? 0))));
+    } catch {
+      // Fall back to local derived score below.
+    }
+  }
+
   const { weatherRisk, zoneMultiplier, seasonFactor } = await fetchDynamicPricingContext(user.city);
   const workExposure = Math.min(1, user.workingHoursPerDay / 12);
   const loyaltyBuffer = user.loyaltyDiscount;
@@ -83,4 +137,19 @@ function getSeasonFactorFromMonth(month: number): number {
   if (month >= 9 && month <= 10) return 1.08;
   if (month >= 3 && month <= 4) return 1.1;
   return 1;
+}
+
+export async function fetchWeeklyEarningsFromApi(userId: string): Promise<WeeklyEarningsPoint[] | null> {
+  const backendBaseUrl = import.meta.env.VITE_BACKEND_API_URL;
+  if (!backendBaseUrl) return null;
+
+  try {
+    const response = await fetch(`${backendBaseUrl}/analytics/weekly-earnings?userId=${encodeURIComponent(userId)}`);
+    if (!response.ok) throw new Error(`Failed backend weekly earnings: ${response.status}`);
+    const data = await response.json();
+    if (!Array.isArray(data)) return null;
+    return data as WeeklyEarningsPoint[];
+  } catch {
+    return null;
+  }
 }

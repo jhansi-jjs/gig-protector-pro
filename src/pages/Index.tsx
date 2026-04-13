@@ -16,7 +16,7 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Hero */}
-      <div className="gradient-hero px-6 pt-16 pb-20 text-center relative overflow-hidden">
+      <div className="gradient-hero px-6 pt-16 pb-24 text-center relative overflow-hidden">
         <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", damping: 12 }} className="w-16 h-16 rounded-2xl bg-primary-foreground/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
           <Shield className="h-9 w-9 text-primary-foreground" />
         </motion.div>
@@ -29,7 +29,7 @@ export default function Index() {
       </div>
 
       {/* Features */}
-      <div className="px-6 -mt-8 space-y-3 mb-8">
+      <div className="px-6 -mt-6 relative z-10 space-y-3 mb-8">
         {[
           { icon: <CloudRain className="h-5 w-5 text-shield-blue" />, title: "Weather Protection", desc: "Auto-detect rain, heat & AQI disruptions" },
           { icon: <Megaphone className="h-5 w-5 text-primary" />, title: "Strike & Outage Cover", desc: "Civic bandh & platform downtime coverage" },
