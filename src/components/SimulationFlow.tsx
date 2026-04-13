@@ -7,6 +7,7 @@ import { useAppStore } from "@/lib/store";
 import { processClaim } from "@/lib/insurance-engine";
 import { depositPayoutToUser } from "@/lib/payouts";
 import type { PayoutMethod } from "@/lib/payouts";
+import { anchorAuditHashOnHoodi } from "@/lib/blockchain";
 import type { DisruptionType } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -135,6 +136,8 @@ export default function SimulationFlow() {
     payoutMethod?: PayoutMethod;
     referenceId?: string;
     payoutDestination?: string;
+    chainTxHash?: string;
+    payloadHash?: string;
   } | null>(null);
   const [payoutMethod, setPayoutMethod] = useState<PayoutMethod>("UPI");
   const [upiId, setUpiId] = useState("");
@@ -143,6 +146,7 @@ export default function SimulationFlow() {
   const [bankAccountName, setBankAccountName] = useState("");
   const [walletProvider, setWalletProvider] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
+  const explorerTxBaseUrl = import.meta.env.VITE_HOODI_EXPLORER_TX_BASE_URL;
 
   if (!user || !policy) return null;
 
@@ -224,6 +228,32 @@ export default function SimulationFlow() {
           setPayoutAnimating(true, claim.finalPayout, payoutResult.destination);
           setTimeout(() => setPayoutAnimating(false), 3000);
         }, 400);
+
+        try {
+          const chainResult = await anchorAuditHashOnHoodi({
+            eventType: "PAYOUT_PROCESSED",
+            referenceId: claim.id,
+            payload: {
+              amount: claim.finalPayout,
+              method: payoutResult.method,
+              destination: payoutResult.destination,
+              disruptionType: claim.disruptionType,
+              status: claim.status,
+            },
+          });
+          setClaimResult((prev) =>
+            prev
+              ? { ...prev, chainTxHash: chainResult.txHash, payloadHash: chainResult.payloadHash }
+              : prev
+          );
+          toast.success("Audit hash anchored on Ethereum Hoodi", {
+            description: `Tx: ${chainResult.txHash.slice(0, 10)}...`,
+          });
+        } catch (chainError) {
+          const chainMessage =
+            chainError instanceof Error ? chainError.message : "Blockchain anchor skipped.";
+          toast.info(chainMessage);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Payout transfer failed.";
         toast.error(message, {
@@ -519,6 +549,29 @@ export default function SimulationFlow() {
                       {claimResult.referenceId && (
                         <p className="opacity-85">
                           → {claimResult.payoutMethod} transfer ref: {claimResult.referenceId}
+                        </p>
+                      )}
+                      {claimResult.chainTxHash && (
+                        <p className="opacity-85">
+                          → Hoodi tx: {claimResult.chainTxHash.slice(0, 14)}...
+                        </p>
+                      )}
+                      {claimResult.chainTxHash && explorerTxBaseUrl && (
+                        <p className="opacity-85">
+                          →{" "}
+                          <a
+                            href={`${explorerTxBaseUrl}${claimResult.chainTxHash}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline font-semibold"
+                          >
+                            View Transaction
+                          </a>
+                        </p>
+                      )}
+                      {claimResult.payloadHash && (
+                        <p className="opacity-85">
+                          → Payload hash: {claimResult.payloadHash.slice(0, 14)}...
                         </p>
                       )}
                     </motion.div>

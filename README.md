@@ -597,6 +597,7 @@ Beyond the dual-key check, an **Isolation Forest ML model** runs a second pass o
 - **Government alert feed** (mocked) — Strike/bandh trigger
 - **Zomato/Swiggy API** (simulated) — Platform outage detection, earnings data
 - **Razorpay Checkout / Payment Links (test mode)** — Premium collection portal
+- **Ethereum Hoodi Testnet** — On-chain audit hash anchoring for payout events
 
 ### Infrastructure
 - **AWS EC2 / Render.com** — Backend hosting
