@@ -1,35 +1,10 @@
-import type { UserProfile, Policy, PlanTier, Claim, DisruptionType, ClaimStatus, City } from "./types";
+import type { UserProfile, Policy, PlanTier, Claim, DisruptionType, ClaimStatus } from "./types";
+import { fetchDynamicPricingContext, fetchPlanCatalog, fetchRiskScoreFromApi } from "./api";
 
-// Zone risk multipliers by city
-const ZONE_RISK: Record<City, number> = {
-  Mumbai: 1.20,
-  Delhi: 1.15,
-  Bengaluru: 1.05,
-  Chennai: 1.18,
-  Hyderabad: 1.08,
-  Kolkata: 1.12,
-  Pune: 1.06,
-};
-
-// Season factor (simplified: higher in monsoon months June-Sept)
-function getSeasonFactor(): number {
-  const month = new Date().getMonth(); // 0-indexed
-  if (month >= 5 && month <= 8) return 1.15; // monsoon
-  if (month >= 9 && month <= 10) return 1.08; // post-monsoon
-  if (month >= 3 && month <= 4) return 1.10; // pre-monsoon heat
-  return 1.0;
-}
-
-const PLAN_CONFIG: Record<PlanTier, { basePremium: number; maxPayout: number }> = {
-  "Basic Shield": { basePremium: 29, maxPayout: 500 },
-  "Pro Shield": { basePremium: 59, maxPayout: 800 },
-  "Max Shield": { basePremium: 99, maxPayout: 1200 },
-};
-
-export function calculatePremium(user: UserProfile, tier: PlanTier): Policy {
-  const config = PLAN_CONFIG[tier];
-  const zoneMultiplier = ZONE_RISK[user.city] ?? 1.0;
-  const seasonFactor = getSeasonFactor();
+export async function calculatePremium(user: UserProfile, tier: PlanTier): Promise<Policy> {
+  const planConfig = await fetchPlanCatalog();
+  const config = planConfig[tier];
+  const { zoneMultiplier, seasonFactor } = await fetchDynamicPricingContext(user.city);
   const loyaltyDiscount = user.loyaltyDiscount;
 
   const weeklyPremium = Math.round(
@@ -54,19 +29,8 @@ export function calculatePremium(user: UserProfile, tier: PlanTier): Policy {
   };
 }
 
-export function calculateRiskScore(user: UserProfile): number {
-  let score = 50;
-  // City risk
-  const cityRisk = (ZONE_RISK[user.city] - 1) * 100;
-  score += cityRisk * 2;
-  // Working hours risk (more hours = more exposure)
-  if (user.workingHoursPerDay > 8) score += 10;
-  if (user.workingHoursPerDay > 10) score += 5;
-  // Season
-  score += (getSeasonFactor() - 1) * 80;
-  // Random jitter for demo
-  score += (Math.random() - 0.5) * 10;
-  return Math.min(100, Math.max(0, Math.round(score)));
+export async function calculateRiskScore(user: UserProfile): Promise<number> {
+  return fetchRiskScoreFromApi(user);
 }
 
 // Disruption impact on earnings
@@ -171,8 +135,6 @@ function detectFraud(user: UserProfile, _type: DisruptionType): { fraudScore: nu
   return { fraudScore: Math.min(1, score), fraudFlags: flags };
 }
 
-export function getAllPlanOptions(user: UserProfile): Policy[] {
-  return (["Basic Shield", "Pro Shield", "Max Shield"] as PlanTier[]).map(tier =>
-    calculatePremium(user, tier)
-  );
+export async function getAllPlanOptions(user: UserProfile): Promise<Policy[]> {
+  return Promise.all((["Basic Shield", "Pro Shield", "Max Shield"] as PlanTier[]).map((tier) => calculatePremium(user, tier)));
 }

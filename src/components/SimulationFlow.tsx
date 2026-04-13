@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CloudRain, Bot, ShieldCheck, Banknote, ArrowRight, Radio, FileX, FileCheck, Zap, Thermometer, Wind, Megaphone, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/lib/store";
 import { processClaim } from "@/lib/insurance-engine";
+import { depositPayoutToUser } from "@/lib/payouts";
+import type { PayoutMethod } from "@/lib/payouts";
 import type { DisruptionType } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -74,6 +77,51 @@ function LiveTimer() {
   return <span>{seconds} sec ago</span>;
 }
 
+function getPayoutDestination(input: {
+  payoutMethod: PayoutMethod;
+  upiId: string;
+  bankAccountNumber: string;
+  bankIfsc: string;
+  bankAccountName: string;
+  walletProvider: string;
+  walletNumber: string;
+}): string {
+  if (input.payoutMethod === "UPI") return input.upiId.trim();
+  if (input.payoutMethod === "Bank Transfer") {
+    const masked = input.bankAccountNumber.slice(-4).padStart(input.bankAccountNumber.length, "x");
+    return `${input.bankAccountName.trim()} · ${masked} · ${input.bankIfsc.trim()}`;
+  }
+  return `${input.walletProvider.trim()} · ${input.walletNumber.trim()}`;
+}
+
+function validatePayoutDetails(input: {
+  payoutMethod: PayoutMethod;
+  upiId: string;
+  bankAccountNumber: string;
+  bankIfsc: string;
+  bankAccountName: string;
+  walletProvider: string;
+  walletNumber: string;
+}): string | null {
+  if (input.payoutMethod === "UPI") {
+    if (!/^[\w.-]+@[\w.-]+$/.test(input.upiId.trim())) {
+      return "Enter a valid UPI ID before simulating payout.";
+    }
+    return null;
+  }
+
+  if (input.payoutMethod === "Bank Transfer") {
+    if (input.bankAccountName.trim().length < 3) return "Enter account holder name.";
+    if (!/^\d{9,18}$/.test(input.bankAccountNumber.trim())) return "Enter a valid bank account number.";
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(input.bankIfsc.trim())) return "Enter a valid IFSC code.";
+    return null;
+  }
+
+  if (input.walletProvider.trim().length < 2) return "Enter wallet provider name.";
+  if (!/^\d{10}$/.test(input.walletNumber.trim())) return "Enter a valid 10-digit wallet number.";
+  return null;
+}
+
 export default function SimulationFlow() {
   const { user, policy, addClaim, markClaimPaid, setPayoutAnimating } = useAppStore();
   const [step, setStep] = useState<Step>("idle");
@@ -84,13 +132,46 @@ export default function SimulationFlow() {
     loss: number;
     payout: number;
     status: string;
+    payoutMethod?: PayoutMethod;
+    referenceId?: string;
+    payoutDestination?: string;
   } | null>(null);
+  const [payoutMethod, setPayoutMethod] = useState<PayoutMethod>("UPI");
+  const [upiId, setUpiId] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [bankAccountName, setBankAccountName] = useState("");
+  const [walletProvider, setWalletProvider] = useState("");
+  const [walletNumber, setWalletNumber] = useState("");
 
   if (!user || !policy) return null;
 
   const isTriggered = step !== "idle";
+  const payoutDestination = getPayoutDestination({
+    payoutMethod,
+    upiId,
+    bankAccountNumber,
+    bankIfsc,
+    bankAccountName,
+    walletProvider,
+    walletNumber,
+  });
 
   const runSimulation = async (disruption: typeof DISRUPTION_OPTIONS[0]) => {
+    const validationError = validatePayoutDetails({
+      payoutMethod,
+      upiId,
+      bankAccountNumber,
+      bankIfsc,
+      bankAccountName,
+      walletProvider,
+      walletNumber,
+    });
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     setActiveDisruption(disruption);
     
     toast.info(`${disruption.emoji} ${disruption.type} detected!`, {
@@ -117,14 +198,38 @@ export default function SimulationFlow() {
     setStep("payout");
 
     if (claim.finalPayout > 0 && (claim.status === "approved" || claim.status === "partial")) {
-      toast.success(`₹${claim.finalPayout} credited to your UPI!`, {
-        description: "No claim filed. Fully automated payout.",
-      });
-      setTimeout(() => {
-        markClaimPaid(claim.id);
-        setPayoutAnimating(true, claim.finalPayout);
-        setTimeout(() => setPayoutAnimating(false), 3000);
-      }, 600);
+      try {
+        const payoutResult = await depositPayoutToUser({
+          user,
+          amount: claim.finalPayout,
+          claimId: claim.id,
+          method: payoutMethod,
+          destination: payoutDestination,
+        });
+        setClaimResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                payoutMethod: payoutResult.method,
+                referenceId: payoutResult.referenceId,
+                payoutDestination: payoutResult.destination,
+              }
+            : prev
+        );
+        toast.success(`₹${claim.finalPayout} deposited via ${payoutResult.method}`, {
+          description: `${payoutResult.destination} · Ref: ${payoutResult.referenceId}`,
+        });
+        setTimeout(() => {
+          markClaimPaid(claim.id);
+          setPayoutAnimating(true, claim.finalPayout, payoutResult.destination);
+          setTimeout(() => setPayoutAnimating(false), 3000);
+        }, 400);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Payout transfer failed.";
+        toast.error(message, {
+          description: "Claim was approved but transfer is pending.",
+        });
+      }
     } else if (claim.status === "rejected") {
       toast.error("Claim rejected", {
         description: "Fraud detection flagged this claim.",
@@ -194,6 +299,71 @@ export default function SimulationFlow() {
 
       {step === "idle" ? (
         <div className="space-y-2">
+          <div className="mb-3 rounded-lg border bg-card p-2">
+            <p className="text-xs text-muted-foreground mb-2">Payout method for user deposit</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(["UPI", "Bank Transfer", "Wallet"] as PayoutMethod[]).map((method) => (
+                <Button
+                  key={method}
+                  variant={payoutMethod === method ? "default" : "outline"}
+                  onClick={() => setPayoutMethod(method)}
+                  className="h-8 text-xs"
+                >
+                  {method}
+                </Button>
+              ))}
+            </div>
+            <div className="mt-2">
+              {payoutMethod === "UPI" && (
+                <Input
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  placeholder="UPI ID (e.g. arjun@oksbi)"
+                  className="h-8 text-xs"
+                />
+              )}
+              {payoutMethod === "Bank Transfer" && (
+                <div className="grid grid-cols-1 gap-2">
+                  <Input
+                    value={bankAccountName}
+                    onChange={(e) => setBankAccountName(e.target.value)}
+                    placeholder="Account holder name"
+                    className="h-8 text-xs"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      value={bankAccountNumber}
+                      onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Account number"
+                      className="h-8 text-xs"
+                    />
+                    <Input
+                      value={bankIfsc}
+                      onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                      placeholder="IFSC code"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+              {payoutMethod === "Wallet" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={walletProvider}
+                    onChange={(e) => setWalletProvider(e.target.value)}
+                    placeholder="Wallet (Paytm)"
+                    className="h-8 text-xs"
+                  />
+                  <Input
+                    value={walletNumber}
+                    onChange={(e) => setWalletNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Wallet number"
+                    className="h-8 text-xs"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
           {/* Primary buttons grid */}
           <div className="grid grid-cols-2 gap-2">
             {DISRUPTION_OPTIONS.map((d) => (
@@ -298,7 +468,7 @@ export default function SimulationFlow() {
                         transition={{ delay: 0.5 }}
                         className="text-base font-semibold opacity-90"
                       >
-                        Credited Instantly
+                        Amount Debited Successfully
                       </motion.p>
                       {claimResult.status === "partial" && (
                         <motion.p
@@ -341,6 +511,16 @@ export default function SimulationFlow() {
                       <p className="opacity-85">{activeDisruption?.type} exceeded threshold ({activeDisruption?.threshold})</p>
                       <p className="opacity-85">Your earnings dropped significantly</p>
                       <p className="opacity-85">→ Compensation triggered automatically</p>
+                      {claimResult.referenceId && (
+                        <p className="opacity-85">
+                          → Debited to {claimResult.payoutDestination}
+                        </p>
+                      )}
+                      {claimResult.referenceId && (
+                        <p className="opacity-85">
+                          → {claimResult.payoutMethod} transfer ref: {claimResult.referenceId}
+                        </p>
+                      )}
                     </motion.div>
 
                     {/* Trust signals */}

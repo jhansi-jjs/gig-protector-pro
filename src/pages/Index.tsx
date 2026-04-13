@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Shield, ChevronRight, CloudRain, Thermometer, Wind, Megaphone, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,10 @@ import { useAppStore } from "@/lib/store";
 export default function Index() {
   const navigate = useNavigate();
   const user = useAppStore((s) => s.user);
+  const policy = useAppStore((s) => s.policy);
 
-  if (user) {
-    navigate("/dashboard");
-    return null;
+  if (user && policy) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (

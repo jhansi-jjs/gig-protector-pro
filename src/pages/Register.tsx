@@ -24,17 +24,19 @@ export default function Register() {
     workingHours: "8",
   });
   const [step, setStep] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
 
   const canProceed =
     step === 0
       ? form.name.trim().length > 0 && form.phone.length >= 10
       : form.city && form.platform;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (step === 0) {
       setStep(1);
       return;
     }
+    setSubmitting(true);
     const profile: UserProfile = {
       id: `USR-${Date.now().toString(36).toUpperCase()}`,
       name: form.name,
@@ -50,9 +52,14 @@ export default function Register() {
       loyaltyDiscount: 0,
       claimHistory: [],
     };
-    profile.riskScore = calculateRiskScore(profile);
-    setUser(profile);
-    navigate("/choose-plan");
+
+    try {
+      profile.riskScore = await calculateRiskScore(profile);
+      setUser(profile);
+      navigate("/choose-plan");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -120,8 +127,8 @@ export default function Register() {
           </div>
         )}
 
-        <Button className="w-full mt-8 gradient-hero text-primary-foreground h-12 text-base font-semibold" disabled={!canProceed} onClick={handleSubmit}>
-          {step === 0 ? "Continue" : "Create My Profile"}
+        <Button className="w-full mt-8 gradient-hero text-primary-foreground h-12 text-base font-semibold" disabled={!canProceed || submitting} onClick={handleSubmit}>
+          {step === 0 ? "Continue" : submitting ? "Creating Profile..." : "Create My Profile"}
           <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
 

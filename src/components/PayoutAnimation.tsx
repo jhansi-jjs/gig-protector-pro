@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
 
-export default function PayoutAnimation({ amount }: { amount: number }) {
+export default function PayoutAnimation({ amount, destination }: { amount: number; destination?: string }) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -31,7 +31,7 @@ export default function PayoutAnimation({ amount }: { amount: number }) {
           ₹{amount}
         </motion.p>
         <motion.p initial={{ y: 8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="text-xs text-muted-foreground mt-2">
-          Credited to UPI instantly
+          {destination ? `Debited to ${destination}` : "Debited instantly"}
         </motion.p>
       </motion.div>
     </motion.div>

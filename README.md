@@ -596,7 +596,7 @@ Beyond the dual-key check, an **Isolation Forest ML model** runs a second pass o
 - **CPCB AQI API** (mock/free) — Pollution trigger
 - **Government alert feed** (mocked) — Strike/bandh trigger
 - **Zomato/Swiggy API** (simulated) — Platform outage detection, earnings data
-- **Razorpay Test Mode / UPI Simulator** — Instant payout processing
+- **Razorpay Checkout / Payment Links (test mode)** — Premium collection portal
 
 ### Infrastructure
 - **AWS EC2 / Render.com** — Backend hosting

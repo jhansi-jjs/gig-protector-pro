@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, CheckCircle2, AlertTriangle, XCircle, Clock, BarChart3, LogOut } from "lucide-react";
 import { useAppStore } from "@/lib/store";
@@ -21,20 +21,21 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; clas
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, policy, claims, payoutAnimating, lastPayout, reset } = useAppStore();
+  const { user, policy, claims, payoutAnimating, lastPayout, lastPayoutDestination, reset } = useAppStore();
 
-  if (!user || !policy) {
-    navigate("/");
-    return null;
+  if (!user) {
+    return <Navigate to="/" replace />;
   }
 
   const totalPaid = claims.filter((c) => c.status === "paid" || c.status === "approved").reduce((s, c) => s + c.finalPayout, 0);
-  const renewalDate = new Date(policy.coverageEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const renewalDate = policy
+    ? new Date(policy.coverageEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+    : "--";
 
   return (
     <div className="min-h-screen bg-background pb-24">
       <AnimatePresence>
-        {payoutAnimating && <PayoutAnimation amount={lastPayout} />}
+        {payoutAnimating && <PayoutAnimation amount={lastPayout} destination={lastPayoutDestination} />}
       </AnimatePresence>
 
       {/* Header */}
@@ -65,21 +66,21 @@ export default function Dashboard() {
         <div className="flex justify-between items-start">
           <div>
             <p className="text-xs text-muted-foreground">Active Plan</p>
-            <h3 className="font-display font-bold text-lg">{policy.tier}</h3>
+            <h3 className="font-display font-bold text-lg">{policy?.tier ?? "No active plan"}</h3>
           </div>
-          <div className="flex items-center gap-1 bg-shield-green/10 text-shield-green text-xs font-semibold px-2.5 py-1 rounded-full">
+          <div className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${policy ? "bg-shield-green/10 text-shield-green" : "bg-shield-amber/10 text-shield-amber"}`}>
             <div className="w-1.5 h-1.5 bg-shield-green rounded-full animate-pulse-glow" />
-            Active
+            {policy ? "Active" : "Pending"}
           </div>
         </div>
         <div className="grid grid-cols-4 gap-2 mt-4">
           <div className="text-center">
             <p className="text-[10px] text-muted-foreground">Premium</p>
-            <p className="font-display font-bold text-sm text-foreground">₹{policy.weeklyPremium}<span className="text-[10px] font-normal text-muted-foreground">/wk</span></p>
+            <p className="font-display font-bold text-sm text-foreground">{policy ? <>₹{policy.weeklyPremium}<span className="text-[10px] font-normal text-muted-foreground">/wk</span></> : "--"}</p>
           </div>
           <div className="text-center">
             <p className="text-[10px] text-muted-foreground">Max Payout</p>
-            <p className="font-display font-bold text-sm text-foreground">₹{policy.maxPayoutPerDay}<span className="text-[10px] font-normal text-muted-foreground">/day</span></p>
+            <p className="font-display font-bold text-sm text-foreground">{policy ? <>₹{policy.maxPayoutPerDay}<span className="text-[10px] font-normal text-muted-foreground">/day</span></> : "--"}</p>
           </div>
           <div className="text-center">
             <p className="text-[10px] text-muted-foreground">Protected</p>
@@ -90,10 +91,23 @@ export default function Dashboard() {
             <p className="font-display font-bold text-sm text-foreground">{renewalDate}</p>
           </div>
         </div>
+        {!policy && (
+          <div className="mt-4 border-t pt-4">
+            <p className="text-xs text-muted-foreground mb-2">
+              You skipped plan selection. Choose a plan to activate coverage and payouts.
+            </p>
+            <button
+              onClick={() => navigate("/choose-plan")}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              Choose Plan Now
+            </button>
+          </div>
+        )}
       </motion.div>
 
       {/* Simulation Flow — All 5 disruption types */}
-      <SimulationFlow />
+      {policy && <SimulationFlow />}
 
       {/* Earnings Chart */}
       <EarningsChart />

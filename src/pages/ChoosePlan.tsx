@@ -1,10 +1,13 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Shield, Check, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/store";
 import { getAllPlanOptions } from "@/lib/insurance-engine";
+import { startRazorpayCheckout } from "@/lib/razorpay";
 import type { Policy } from "@/lib/types";
+import { toast } from "sonner";
 
 const PLAN_FEATURES: Record<string, string[]> = {
   "Basic Shield": ["Up to ₹500/day payout", "Weather + AQI coverage", "Basic fraud protection"],
@@ -16,17 +19,48 @@ export default function ChoosePlan() {
   const navigate = useNavigate();
   const user = useAppStore((s) => s.user);
   const setPolicy = useAppStore((s) => s.setPolicy);
+  const [plans, setPlans] = useState<Policy[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
+  const [checkingOutTier, setCheckingOutTier] = useState<string | null>(null);
 
-  if (!user) {
-    navigate("/");
-    return null;
-  }
+  useEffect(() => {
+    if (!user) {
+      navigate("/");
+      return;
+    }
 
-  const plans = getAllPlanOptions(user);
+    let cancelled = false;
+    (async () => {
+      try {
+        const options = await getAllPlanOptions(user);
+        if (!cancelled) setPlans(options);
+      } catch {
+        toast.error("Unable to load plan pricing right now.");
+      } finally {
+        if (!cancelled) setLoadingPlans(false);
+      }
+    })();
 
-  const selectPlan = (policy: Policy) => {
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, user]);
+
+  if (!user) return null;
+
+  const selectPlan = async (policy: Policy) => {
+    setCheckingOutTier(policy.tier);
     setPolicy(policy);
-    navigate("/dashboard");
+
+    try {
+      await startRazorpayCheckout(policy.tier, policy.weeklyPremium);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Payment could not be started.";
+      toast.error(message);
+      navigate("/dashboard");
+    } finally {
+      setCheckingOutTier(null);
+    }
   };
 
   return (
@@ -45,7 +79,8 @@ export default function ChoosePlan() {
       </div>
 
       <div className="px-4 -mt-6 space-y-4 pb-8">
-        {plans.map((plan, i) => {
+        {loadingPlans && <div className="text-sm text-muted-foreground text-center py-8">Loading API-based pricing...</div>}
+        {!loadingPlans && plans.map((plan, i) => {
           const isPro = plan.tier === "Pro Shield";
           return (
             <motion.div
@@ -89,14 +124,24 @@ export default function ChoosePlan() {
               </ul>
 
               <Button
-                onClick={() => selectPlan(plan)}
+                onClick={() => void selectPlan(plan)}
+                disabled={Boolean(checkingOutTier)}
                 className={`w-full h-10 font-semibold ${isPro ? "gradient-hero text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"}`}
               >
-                Select {plan.tier}
+                {checkingOutTier === plan.tier ? "Opening Razorpay..." : `Pay with Razorpay for ${plan.tier}`}
               </Button>
             </motion.div>
           );
         })}
+        {!loadingPlans && (
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/dashboard")}
+            className="w-full h-10 text-muted-foreground"
+          >
+            Skip for now
+          </Button>
+        )}
       </div>
     </div>
   );
