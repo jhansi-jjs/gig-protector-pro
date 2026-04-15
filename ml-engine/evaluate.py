@@ -7,6 +7,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import LabelEncoder
+from hgrs_model import generate_zone_embedding
 
 print("=" * 55)
 print("   SHIELDRUN ML MODEL EVALUATION REPORT")
@@ -41,6 +42,21 @@ feature_cols = [
     'multiple_deliveries'
 ]
 df = df.dropna(subset=feature_cols)
+
+print("Extracting Level 1 HGRS Embeddings for Evaluation...")
+mock_zones = ["Andheri East", "Dharavi", "Bandra", "Connaught Place", "Lajpat Nagar", "Koramangala", "Indiranagar", "T Nagar", "Hitech City"]
+
+def get_row_embedding(row):
+    mock_zone = mock_zones[hash(str(row.name)) % len(mock_zones)]
+    return generate_zone_embedding(mock_zone, int(row['weather_enc']))
+
+embeddings = df.apply(get_row_embedding, axis=1).tolist()
+emb_cols = [f'emb_{i}' for i in range(8)]
+emb_df = pd.DataFrame(embeddings, columns=emb_cols, index=df.index)
+
+df = pd.concat([df, emb_df], axis=1)
+feature_cols.extend(emb_cols)
+
 X = df[feature_cols].fillna(0)
 
 weather_risk = df['weather_enc'] * 0.04
@@ -73,7 +89,7 @@ print(f"  CV Scores         : {[round(s,4) for s in cv_scores]}")
 importance = premium_model.feature_importances_
 print(f"\n  Top Feature Importances:")
 for feat, imp in sorted(zip(feature_cols, importance), key=lambda x: -x[1]):
-    bar = "█" * int(imp * 100)
+    bar = "#" * int(imp * 100)
     print(f"    {feat:<35} {imp:.4f}  {bar}")
 
 # ── FRAUD MODEL (Isolation Forest) ──────────────────

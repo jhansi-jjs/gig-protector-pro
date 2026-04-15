@@ -5,6 +5,7 @@ from sklearn.preprocessing import LabelEncoder
 import xgboost as xgb
 import pickle
 import os
+from hgrs_model import generate_zone_embedding
 
 print("Loading datasets...")
 
@@ -36,6 +37,25 @@ feature_cols = [
 ]
 
 df = df.dropna(subset=feature_cols)
+
+print("Extracting Level 1 HGRS Embeddings...")
+mock_zones = ["Andheri East", "Dharavi", "Bandra", "Connaught Place", "Lajpat Nagar", "Koramangala", "Indiranagar", "T Nagar", "Hitech City"]
+
+def get_row_embedding(row):
+    # Deterministically assign a zone based on the row index/name to link Tabular + Spatial
+    mock_zone = mock_zones[hash(str(row.name)) % len(mock_zones)]
+    return generate_zone_embedding(mock_zone, int(row['weather_enc']))
+
+# Apply the Level 1 embedding function to the entire dataset
+embeddings = df.apply(get_row_embedding, axis=1).tolist()
+
+emb_cols = [f'emb_{i}' for i in range(8)]
+emb_df = pd.DataFrame(embeddings, columns=emb_cols, index=df.index)
+
+# Fuse tabular data with embeddings
+df = pd.concat([df, emb_df], axis=1)
+feature_cols.extend(emb_cols)
+
 X = df[feature_cols].fillna(0)
 
 # Premium multiplier target based on real risk factors

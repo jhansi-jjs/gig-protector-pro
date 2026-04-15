@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+ml-engine/venv/
+__pycache__/
+*.pyc
+*.pyo

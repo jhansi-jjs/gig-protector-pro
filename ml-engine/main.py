@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import numpy as np
 import pickle
 import os
+from hgrs_model import generate_zone_embedding
 
 app = FastAPI()
 
@@ -64,6 +65,8 @@ class PremiumResponse(BaseModel):
     zone_risk_label: str
 
 class FraudRequest(BaseModel):
+    zone: str = "Andheri East"
+    weather: str = "Sunny"
     claim_count_30d: int = 0
     same_trigger_count_7d: int = 0
     hour_of_claim: int = 12
@@ -89,9 +92,13 @@ def calculate_premium(req: PremiumRequest):
     traffic_enc = TRAFFIC_ENC.get(req.traffic, 2)
     city_enc = CITY_ENC.get(req.city_type, 0)
 
-    features = np.array([[
-        30, 4.2, weather_enc, traffic_enc, city_enc, 1, 0, 2, 1
-    ]])
+    # Generate Level 1 Pretrained Embedding 
+    embedding_features = generate_zone_embedding(req.zone, weather_enc)
+    
+    # Fuse Tabular and Geoclimatic features
+    tabular_features = [30, 4.2, weather_enc, traffic_enc, city_enc, 1, 0, 2, 1]
+    features = np.array([tabular_features + embedding_features])
+    
     ml_mult = float(premium_model.predict(features)[0])
     ml_mult = max(0.9, min(ml_mult, 1.4))
 
@@ -129,10 +136,11 @@ def fraud_check(req: FraudRequest):
     if req.delivery_age_months < 1: score += 20
 
     # ML isolation forest check
-    features = np.array([[
-        30, req.worker_rating,
-        2, 1, 0, 1, 0, 2, 1
-    ]])
+    weather_enc = WEATHER_ENC.get(req.weather, 4)
+    embedding_features = generate_zone_embedding(req.zone, weather_enc)
+    tabular_features = [30, req.worker_rating, 2, 1, 0, 1, 0, 2, 1]
+    
+    features = np.array([tabular_features + embedding_features])
     ml_pred = fraud_model.predict(features)[0]
     if ml_pred == -1:
         score += 20
