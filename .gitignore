@@ -26,3 +26,16 @@ ml-engine/venv/
 __pycache__/
 *.pyc
 *.pyo
+# datasets
+*.csv
+*.nc
+
+# models
+*.pkl
+
+# python
+__pycache__/
+*.pyc
+
+# notebooks checkpoints
+.ipynb_checkpoints/
