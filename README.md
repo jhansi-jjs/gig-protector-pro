@@ -1,8 +1,22 @@
 # ShieldRun — AI-Powered Secure Parametric Income Insurance for Food Delivery Partners
 
-> **Guidewire DEVTrails 2026** | Team: CRACKED | Persona: Food Delivery (Zomato / Swiggy)
-
+╔══════════════════════════════════════════════════════════════════╗
+║           GUIDEWIRE DEVTRAILS 2026 — SEED. SCALE. SOAR.          ║
+║                                                                  ║
+║   Team: CRACKED         |         Amrita Vishwa Vidyapeetham     ║
+║   Persona: Food Delivery (Zomato / Swiggy / Amazon Flex)         ║
+║   Phase: Seed → Scale → Soar                                     ║
+╚══════════════════════════════════════════════════════════════════╝
 ---
+
+Why We Built This — Aligned with the DEVTrails Mission
+
+"Instead of recruitment drives or branded giveaways, students take on messy, industry-grade challenges that go beyond writing code. The goal is to give them a reason to care about insurance technology." — Guidewire DEVTrails Team
+
+We heard that challenge. And we answered it with ShieldRun.
+
+Guidewire's core mission is to power the P&C insurance industry — Property & Casualty — the layer of the economy that catches people when life goes wrong. For decades, that system has worked well for car owners, homeowners, and businesses.
+But 12 million gig workers in India? The system doesn't see them at all.
 
 ## The Problem
 
@@ -41,6 +55,20 @@ India's food delivery partners are the last mile of the digital economy — yet 
 | 5 | **Platform Outage** | Zomato/Swiggy app downtime > 2 hours (verified) | Zero orders possible; full earnings loss |
 
 > **Coverage Scope:** LOSS OF INCOME ONLY. No vehicle repair, no health, no accident bills.
+
+---
+
+## Core Evaluation Pillars
+| DEVTrails Evaluation Pillar | How ShieldRun Addresses It |
+|---|---|
+| **Real-world industry relevance** | Solves the income protection gap for 12M+ gig workers — a documented, data-backed crisis |
+| **Understanding of insurance mechanics** | Full parametric trigger model, loss ratio formula, dynamic premium logic, IRDAI compliance awareness |
+| **Claims lifecycle knowledge** | Automated FNOL → eligibility check → fraud validation → payout → audit — zero manual steps |
+| **Fraud detection under pressure** | Built a 4-layer anti-spoofing system *before* the market crash challenge — not after |
+| **AI/ML integration** | Custom HGRS algorithm, XGBoost premium model, Isolation Forest fraud engine, LSTM forecasting |
+| **Startup thinking under constraints** | Weekly premium model mirrors gig worker pay cycles; loss ratio auto-adjusts to stay solvent |
+| **Scalability** | Pincode-level hyperlocal risk scoring, designed for 23.5M workers by 2030 |
+| **Security & trust** | AES-256 encryption, blockchain audit ledger, HMAC-signed OTPs, GPS privacy by design |
 
 ---
 
