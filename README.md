@@ -1,12 +1,15 @@
 # ShieldRun — AI-Powered Secure Parametric Income Insurance for Food Delivery Partners
 
+```
 ╔══════════════════════════════════════════════════════════════════╗
-║           GUIDEWIRE DEVTRAILS 2026 — SEED. SCALE. SOAR.          ║
+║           GUIDEWIRE DEVTRAILS 2026 — SEED. SCALE. SOAR.         ║
 ║                                                                  ║
 ║   Team: CRACKED         |         Amrita Vishwa Vidyapeetham     ║
 ║   Persona: Food Delivery (Zomato / Swiggy / Amazon Flex)         ║
 ║   Phase: Seed → Scale → Soar                                     ║
 ╚══════════════════════════════════════════════════════════════════╝
+```
+
 ---
 
 Why We Built This — Aligned with the DEVTrails Mission
