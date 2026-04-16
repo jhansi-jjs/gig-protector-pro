@@ -2,7 +2,7 @@
 
 ```
 ╔══════════════════════════════════════════════════════════════════╗
-║           GUIDEWIRE DEVTRAILS 2026 — SEED. SCALE. SOAR.         ║
+║           GUIDEWIRE DEVTRAILS 2026 — SEED. SCALE. SOAR.          ║
 ║                                                                  ║
 ║   Team: CRACKED         |         Amrita Vishwa Vidyapeetham     ║
 ║   Persona: Food Delivery (Zomato / Swiggy / Amazon Flex)         ║
