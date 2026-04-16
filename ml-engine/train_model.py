@@ -75,31 +75,42 @@ feature_cols.extend(emb_cols)
 X = df[feature_cols].fillna(0)
 
 # ======================
-# TARGET (RISK / PREMIUM MULTIPLIER)
+# TARGETS
 # ======================
+# Regression target: Delivery time
+y_reg = df['Time_taken'].fillna(df['Time_taken'].median())
+
+# Classification target: Delay risk (1 if > 30 min)
+y_clf = (df['Time_taken'] > 30).astype(int)
+
+# Premium multiplier (existing)
 weather_risk = df['weather_enc'] * 0.04
 traffic_risk = df['traffic_enc'] * 0.03
 festival_risk = df['festival_enc'] * 0.05
-
-y = (1.0 + weather_risk + traffic_risk + festival_risk).clip(0.8, 1.5)
+y_premium = (1.0 + weather_risk + traffic_risk + festival_risk).clip(0.8, 1.5)
 
 # ======================
 # TRAIN MODELS
 # ======================
 
-print("\nTraining XGBoost...")
+print("\nTraining XGBoost for premium...")
 xgb_model = xgb.XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.1)
-xgb_model.fit(X, y)
+xgb_model.fit(X, y_premium)
 print("XGB done")
 
-print("\nTraining LightGBM...")
-lgb_model = lgb.LGBMRegressor(n_estimators=100)
-lgb_model.fit(X, y)
-print("LGB done")
+print("\nTraining LightGBM Regressor for delivery time...")
+lgbm_reg = lgb.LGBMRegressor(n_estimators=100)
+lgbm_reg.fit(X, y_reg)
+print("LGBM Regressor done")
+
+print("\nTraining LightGBM Classifier for delay risk...")
+lgbm_clf = lgb.LGBMClassifier(n_estimators=100)
+lgbm_clf.fit(X, y_clf)
+print("LGBM Classifier done")
 
 print("\nTraining Random Forest...")
 rf_model = RandomForestRegressor(n_estimators=100)
-rf_model.fit(X, y)
+rf_model.fit(X, y_premium)
 print("RF done")
 
 # ======================
@@ -111,7 +122,7 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
 mlp_model = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=500)
-mlp_model.fit(X_scaled, y)
+mlp_model.fit(X_scaled, y_premium)
 
 print("MLP done")
 
@@ -130,7 +141,8 @@ print("Fraud done")
 os.makedirs('models', exist_ok=True)
 
 pickle.dump(xgb_model, open('models/xgb.pkl', 'wb'))
-pickle.dump(lgb_model, open('models/lgb.pkl', 'wb'))
+pickle.dump(lgbm_reg, open('models/lgbm_reg.pkl', 'wb'))
+pickle.dump(lgbm_clf, open('models/lgbm_clf.pkl', 'wb'))
 pickle.dump(rf_model, open('models/rf.pkl', 'wb'))
 pickle.dump(mlp_model, open('models/mlp.pkl', 'wb'))
 pickle.dump(fraud_model, open('models/fraud_model.pkl', 'wb'))

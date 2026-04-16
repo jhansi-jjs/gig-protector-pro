@@ -5,6 +5,10 @@ import numpy as np
 import joblib
 import hashlib
 import pandas as pd
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+MODELS_DIR = BASE_DIR / "models"
 
 app = FastAPI()
 
@@ -21,9 +25,9 @@ app.add_middleware(
 # ======================
 # LOAD MODELS
 # ======================
-lgbm_reg = joblib.load("models/lgbm_reg.pkl")
-lgbm_clf = joblib.load("models/lgbm_clf.pkl")
-feature_cols = joblib.load("models/feature_cols.pkl")
+lgbm_reg = joblib.load(MODELS_DIR / "lgbm_reg.pkl")
+lgbm_clf = joblib.load(MODELS_DIR / "lgbm_clf.pkl")
+feature_cols = joblib.load(MODELS_DIR / "feature_cols.pkl")
 
 # ======================
 # EMBEDDING
@@ -196,3 +200,7 @@ def health():
         "status": "Production Ready",
         "models": "LightGBM + HGRS embeddings"
     }
+
+@app.get("/")
+def root():
+    return {"status": "ok"}
