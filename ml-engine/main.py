@@ -6,6 +6,7 @@ import joblib
 import hashlib
 import pandas as pd
 from pathlib import Path
+from hgrs_model import generate_zone_embedding
 
 BASE_DIR = Path(__file__).resolve().parent
 MODELS_DIR = BASE_DIR / "models"
@@ -27,26 +28,12 @@ app.add_middleware(
 # ======================
 lgbm_reg = joblib.load(MODELS_DIR / "lgbm_reg.pkl")
 lgbm_clf = joblib.load(MODELS_DIR / "lgbm_clf.pkl")
+fraud_model_iso = joblib.load(MODELS_DIR / "fraud_model_iso.pkl")
+fraud_model_xgb = joblib.load(MODELS_DIR / "fraud_model_xgb.pkl")
 feature_cols = joblib.load(MODELS_DIR / "feature_cols.pkl")
 
 # ======================
-# EMBEDDING
-# ======================
-EMBEDDING_DIM = 8
 
-def generate_zone_embedding(zone: str, weather_enc: int):
-    signature = f"{zone}_{weather_enc}".encode("utf-8")
-    seed = int(hashlib.md5(signature).hexdigest()[:8], 16)
-    rng = np.random.RandomState(seed)
-
-    embedding = rng.uniform(-1.0, 1.0, size=EMBEDDING_DIM)
-
-    if weather_enc in [2]:
-        embedding -= 0.2
-
-    return embedding.tolist()
-
-# ======================
 # REQUEST MODEL
 # ======================
 class FinalRequest(BaseModel):
@@ -68,6 +55,13 @@ class FinalRequest(BaseModel):
     worker_rating: float = 4.0
     delivery_age_months: int = 6
 
+    # New fraud features
+    session_active_duration: float = 30.0
+    platform_login_activity: int = 2
+    zone_match: int = 1
+    time_between_claims: float = 100.0
+    delivery_completion_rate: float = 0.8
+
 # ======================
 # HELPERS
 # ======================
@@ -84,6 +78,28 @@ def get_risk_level(score):
     elif score > 0.4:
         return "MEDIUM"
     return "LOW"
+
+# ======================
+# FRAUD COMPONENTS
+# ======================
+def rule_based_fraud_score(row):
+    score = 0
+    # High claim count in 30 days
+    if row.get('claim_count_30d', 0) > 2:
+        score += 30
+    # Low zone match
+    if row.get('zone_match', 1) == 0:
+        score += 40
+    # Short time between claims
+    if row.get('time_between_claims', 100) < 24:
+        score += 20
+    # Low completion rate
+    if row.get('delivery_completion_rate', 1.0) < 0.5:
+        score += 25
+    # High session duration (suspicious activity)
+    if row.get('session_active_duration', 0) > 60:
+        score += 15
+    return min(score, 100)
 
 # ======================
 # MAIN API
@@ -105,7 +121,13 @@ def final_decision(req: FinalRequest):
     "vehicle_enc": req.type_of_vehicle,
     "festival_enc": 0,
     "Vehicle_condition": 2,
-    "multiple_deliveries": 1
+    "multiple_deliveries": 1,
+    "claim_count_30d": req.claim_count_30d,
+    "session_active_duration": req.session_active_duration,
+    "platform_login_activity": req.platform_login_activity,
+    "zone_match": req.zone_match,
+    "time_between_claims": req.time_between_claims,
+    "delivery_completion_rate": req.delivery_completion_rate
 }
 
     
@@ -142,29 +164,23 @@ def final_decision(req: FinalRequest):
     risk_prob = float(lgbm_clf.predict_proba(X)[0][1])
 
     # ======================
-    # FRAUD LOGIC
+    # FRAUD DETECTION - THREE COMPONENTS
     # ======================
-    fraud_score = 0
-
-    if req.claim_count_30d > 5:
-        fraud_score += 40
-    elif req.claim_count_30d > 3:
-        fraud_score += 20
-
-    if req.same_trigger_count_7d > 2:
-        fraud_score += 35
-    elif req.same_trigger_count_7d > 1:
-        fraud_score += 15
-
-    if req.zone_claims_today > 10:
-        fraud_score += 20
-
-    if req.worker_rating < 3.5:
-        fraud_score += 15
-
-    if req.delivery_age_months < 1:
-        fraud_score += 20
-
+    
+    # Component 1: Isolation Forest
+    fraud_score_iso_raw = fraud_model_iso.decision_function(X)[0]
+    fraud_score_iso = (( -fraud_score_iso_raw + 1 ) / 2) * 100
+    fraud_score_iso = min(fraud_score_iso, 100)
+    
+    # Component 2: Rule-based
+    fraud_score_rule = rule_based_fraud_score(input_dict)
+    
+    # Component 3: XGBoost
+    fraud_prob_xgb = fraud_model_xgb.predict_proba(X)[0][1]
+    fraud_score_xgb = fraud_prob_xgb * 100
+    
+    # Ensemble: Weighted average (can be tuned)
+    fraud_score = (0.4 * fraud_score_iso + 0.3 * fraud_score_rule + 0.3 * fraud_score_xgb)
     fraud_score = min(fraud_score, 100)
 
     # ======================
@@ -192,13 +208,82 @@ def final_decision(req: FinalRequest):
     }
 
 # ======================
+# FRAUD CHECK API
+# ======================
+@app.post("/fraud-check")
+def fraud_check(req: FinalRequest):
+    try:
+        # Step 1: Weather encoding
+        weather_enc = get_weather(req.temperature, req.rainfall)
+
+        # Step 2: Embedding
+        embedding = generate_zone_embedding(req.zone, weather_enc)
+        input_dict = {
+            "Delivery_person_Age": req.delivery_person_age,
+            "Delivery_person_Ratings": req.delivery_person_ratings,
+            "weather_enc": weather_enc,
+            "traffic_enc": 2,  # default for now
+            "city_enc": 0,     # default
+            "vehicle_enc": req.type_of_vehicle,
+            "festival_enc": 0,
+            "Vehicle_condition": 2,
+            "multiple_deliveries": 1,
+            "claim_count_30d": req.claim_count_30d,
+            "session_active_duration": req.session_active_duration,
+            "platform_login_activity": req.platform_login_activity,
+            "zone_match": req.zone_match,
+            "time_between_claims": req.time_between_claims,
+            "delivery_completion_rate": req.delivery_completion_rate
+        }
+
+        # Add embeddings
+        for i in range(8):
+            input_dict[f"emb_{i}"] = embedding[i]
+
+        df_input = pd.DataFrame([input_dict])
+
+        # Ensure all columns exist
+        for col in feature_cols:
+            if col not in df_input.columns:
+                df_input[col] = 0
+
+        # Ensure correct order
+        X = df_input[feature_cols]
+
+        # Fraud detection - Three Components
+        fraud_score_iso_raw = fraud_model_iso.decision_function(X)[0]
+        fraud_score_iso = (( -fraud_score_iso_raw + 1 ) / 2) * 100
+        fraud_score_iso = min(fraud_score_iso, 100)
+        
+        fraud_score_rule = rule_based_fraud_score(input_dict)
+        
+        fraud_prob_xgb = fraud_model_xgb.predict_proba(X)[0][1]
+        fraud_score_xgb = fraud_prob_xgb * 100
+        
+        fraud_score = (0.4 * fraud_score_iso + 0.3 * fraud_score_rule + 0.3 * fraud_score_xgb)
+        fraud_score = min(fraud_score, 100)
+
+        return {
+            "fraud_score": fraud_score,
+            "is_fraud": fraud_score >= 70,
+            "components": {
+                "isolation_forest": fraud_score_iso,
+                "rule_based": fraud_score_rule,
+                "xgboost": fraud_score_xgb
+            }
+        }
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
+# ======================
 # HEALTH
 # ======================
 @app.get("/health")
 def health():
     return {
         "status": "Production Ready",
-        "models": "LightGBM + HGRS embeddings"
+        "models": "LightGBM + HGRS embeddings + 3-Component Fraud Detection",
+        "fraud_components": ["Isolation Forest", "Rule-based Engine", "XGBoost Classifier"]
     }
 
 @app.get("/")

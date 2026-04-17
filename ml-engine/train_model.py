@@ -40,6 +40,19 @@ df['city_enc'] = le.fit_transform(df['City'].astype(str))
 df['vehicle_enc'] = le.fit_transform(df['Type_of_vehicle'].astype(str))
 df['festival_enc'] = le.fit_transform(df['Festival'].astype(str))
 
+# ======================
+# FRAUD-SPECIFIC FEATURES
+# ======================
+np.random.seed(42)  # For reproducibility
+
+# Simulate fraud-related features
+df['claim_count_30d'] = np.random.poisson(0.5, len(df))  # Claims in last 30 days
+df['session_active_duration'] = np.random.exponential(30, len(df))  # Minutes active during disruption
+df['platform_login_activity'] = np.random.randint(0, 10, len(df))  # Logins in last 24h
+df['zone_match'] = np.random.choice([0, 1], len(df), p=[0.1, 0.9])  # 1 if registered zone matches claimed
+df['time_between_claims'] = np.random.exponential(100, len(df))  # Hours since last claim
+df['delivery_completion_rate'] = np.random.beta(8, 2, len(df))  # Completion rate during disruption window
+
 feature_cols = [
     'Delivery_person_Age',
     'Delivery_person_Ratings',
@@ -49,7 +62,13 @@ feature_cols = [
     'vehicle_enc',
     'festival_enc',
     'Vehicle_condition',
-    'multiple_deliveries'
+    'multiple_deliveries',
+    'claim_count_30d',
+    'session_active_duration',
+    'platform_login_activity',
+    'zone_match',
+    'time_between_claims',
+    'delivery_completion_rate'
 ]
 
 df = df.dropna(subset=feature_cols)
@@ -94,22 +113,22 @@ y_premium = (1.0 + weather_risk + traffic_risk + festival_risk).clip(0.8, 1.5)
 # ======================
 
 print("\nTraining XGBoost for premium...")
-xgb_model = xgb.XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.1)
+xgb_model = xgb.XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.1, random_state=42)
 xgb_model.fit(X, y_premium)
 print("XGB done")
 
 print("\nTraining LightGBM Regressor for delivery time...")
-lgbm_reg = lgb.LGBMRegressor(n_estimators=100)
+lgbm_reg = lgb.LGBMRegressor(n_estimators=100, random_state=42)
 lgbm_reg.fit(X, y_reg)
 print("LGBM Regressor done")
 
 print("\nTraining LightGBM Classifier for delay risk...")
-lgbm_clf = lgb.LGBMClassifier(n_estimators=100)
+lgbm_clf = lgb.LGBMClassifier(n_estimators=100, random_state=42)
 lgbm_clf.fit(X, y_clf)
 print("LGBM Classifier done")
 
 print("\nTraining Random Forest...")
-rf_model = RandomForestRegressor(n_estimators=100)
+rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
 rf_model.fit(X, y_premium)
 print("RF done")
 
@@ -127,13 +146,49 @@ mlp_model.fit(X_scaled, y_premium)
 print("MLP done")
 
 # ======================
-# FRAUD MODEL
+# FRAUD MODEL COMPONENTS
 # ======================
-print("\nTraining Fraud Model...")
-fraud_model = IsolationForest(contamination=0.1)
-fraud_model.fit(X)
 
-print("Fraud done")
+# Component 1: Isolation Forest (existing)
+print("\nTraining Fraud Model Component 1: Isolation Forest...")
+fraud_model_iso = IsolationForest(contamination=0.1, random_state=42)
+fraud_model_iso.fit(X)
+
+# Component 2: Rule-based Engine
+def rule_based_fraud_score(row):
+    score = 0
+    # High claim count in 30 days
+    if row['claim_count_30d'] > 2:
+        score += 30
+    # Low zone match
+    if row['zone_match'] == 0:
+        score += 40
+    # Short time between claims
+    if row['time_between_claims'] < 24:
+        score += 20
+    # Low completion rate
+    if row['delivery_completion_rate'] < 0.5:
+        score += 25
+    # High session duration (suspicious activity)
+    if row['session_active_duration'] > 60:
+        score += 15
+    return min(score, 100)
+
+df['rule_based_score'] = df.apply(rule_based_fraud_score, axis=1)
+
+# Component 3: XGBoost with synthetic labels
+# Generate synthetic fraud labels based on rules + noise
+np.random.seed(42)
+synthetic_fraud_labels = (df['rule_based_score'] > 50).astype(int)
+# Add some noise to make it realistic
+noise = np.random.choice([0, 1], len(df), p=[0.9, 0.1])
+synthetic_fraud_labels = synthetic_fraud_labels | noise
+
+print("\nTraining Fraud Model Component 3: XGBoost...")
+fraud_model_xgb = xgb.XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1, random_state=42)
+fraud_model_xgb.fit(X, synthetic_fraud_labels)
+
+print("Fraud Components done")
 
 # ======================
 # SAVE MODELS
@@ -145,8 +200,12 @@ pickle.dump(lgbm_reg, open('models/lgbm_reg.pkl', 'wb'))
 pickle.dump(lgbm_clf, open('models/lgbm_clf.pkl', 'wb'))
 pickle.dump(rf_model, open('models/rf.pkl', 'wb'))
 pickle.dump(mlp_model, open('models/mlp.pkl', 'wb'))
-pickle.dump(fraud_model, open('models/fraud_model.pkl', 'wb'))
+pickle.dump(fraud_model_iso, open('models/fraud_model_iso.pkl', 'wb'))
+pickle.dump(fraud_model_xgb, open('models/fraud_model_xgb.pkl', 'wb'))
 pickle.dump(feature_cols, open('models/feature_cols.pkl', 'wb'))
 pickle.dump(scaler, open('models/scaler.pkl', 'wb'))
+
+# For backward compatibility, save Isolation Forest as fraud_model.pkl
+pickle.dump(fraud_model_iso, open('models/fraud_model.pkl', 'wb'))
 
 print("\nAll models saved successfully ✅")

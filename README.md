@@ -94,6 +94,63 @@ India's food delivery partners are the last mile of the digital economy — yet 
         ↓
 [Dashboard Updated: Worker Sees Earnings Protected]
 ```
+
+## Reviewer Run Instructions
+
+Reviewers can run the full system from the GitHub repository with these steps:
+
+1. Clone the repo:
+   ```bash
+   git clone https://github.com/jhansi-jjs/gig-protector-pro.git
+   cd gig-protector-pro
+   ```
+2. Install frontend dependencies:
+   ```bash
+   npm install
+   ```
+3. Install backend dependencies:
+   ```bash
+   cd backend
+   npm install
+   cd ..
+   ```
+4. Set up the Python ML environment:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   cd ml-engine
+   pip install fastapi uvicorn pandas numpy scikit-learn xgboost lightgbm joblib
+   ```
+5. Start the backend API:
+   ```bash
+   cd ../backend
+   node index.js
+   ```
+6. Start the ML service:
+   ```bash
+   cd ../ml-engine
+   source ../.venv/bin/activate
+   uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+7. Start the frontend review UI:
+   ```bash
+   cd ..
+   npm run dev
+   ```
+
+### Review files in GitHub
+- `backend/index.js` — Express API and dual-key OTP logic
+- `ml-engine/main.py` — FastAPI fraud and decision endpoints
+- `ml-engine/train_model.py` — model training, fraud feature generation, and XGBoost rule labels
+- `README.md` — architecture, workflow, and reviewer run instructions
+
+### Expected ports
+- Frontend: `http://localhost:8080`
+- Backend: `http://localhost:5000`
+- ML service: `http://localhost:8000`
+
+To review through GitHub files, open these file paths directly in the repo browser and follow the commands above.
+
 To better illustrate how the system operates in real-world conditions, the following flow outlines the complete execution pipeline:
 ## ⚡ End-to-End Execution Flow (Simplified)
 

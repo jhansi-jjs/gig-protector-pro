@@ -52,6 +52,60 @@ app.post("/fraud-check", async (req, res) => {
   }
 });
 
+// 🔥 DUAL-KEY OTP VERIFICATION
+app.post("/dual-key-verify", (req, res) => {
+  const { worker_id, claim_location, activity_pattern, otp_provided } = req.body;
+
+  // Simulate Dual-Key Verification
+  // Key 1: Location-based OTP (GPS verification)
+  const expected_location_otp = generateLocationOTP(worker_id, claim_location);
+
+  // Key 2: Activity-based OTP (pattern verification)
+  const expected_activity_otp = generateActivityOTP(worker_id, activity_pattern);
+
+  const is_location_valid = otp_provided.location_otp === expected_location_otp;
+  const is_activity_valid = otp_provided.activity_otp === expected_activity_otp;
+
+  if (is_location_valid && is_activity_valid) {
+    res.json({
+      verified: true,
+      message: "Dual-Key verification successful"
+    });
+  } else {
+    res.json({
+      verified: false,
+      message: "Dual-Key verification failed",
+      details: {
+        location_valid: is_location_valid,
+        activity_valid: is_activity_valid
+      }
+    });
+  }
+});
+
+// Helper functions for OTP generation
+function generateLocationOTP(worker_id, location) {
+  // Simple hash-based OTP for demo
+  const seed = `${worker_id}_${location.lat}_${location.lng}`;
+  return (hashCode(seed) % 900000 + 100000).toString(); // 6-digit OTP
+}
+
+function generateActivityOTP(worker_id, pattern) {
+  // Based on activity pattern
+  const seed = `${worker_id}_${pattern.type}_${pattern.timestamp}`;
+  return (hashCode(seed) % 900000 + 100000).toString();
+}
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
 // 🧪 TEST ROUTE (for browser testing only)
 app.get("/test-premium", async (req, res) => {
   try {
