@@ -30,9 +30,6 @@ __pycache__/
 *.csv
 *.nc
 
-# models
-*.pkl
-
 # python
 __pycache__/
 *.pyc
