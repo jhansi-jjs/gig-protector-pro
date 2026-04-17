@@ -30,6 +30,10 @@ lgbm_reg = joblib.load(MODELS_DIR / "lgbm_reg.pkl")
 lgbm_clf = joblib.load(MODELS_DIR / "lgbm_clf.pkl")
 fraud_model_iso = joblib.load(MODELS_DIR / "fraud_model_iso.pkl")
 fraud_model_xgb = joblib.load(MODELS_DIR / "fraud_model_xgb.pkl")
+xgb_premium = joblib.load(MODELS_DIR / "xgb.pkl")
+rf_model = joblib.load(MODELS_DIR / "rf.pkl")
+mlp_model = joblib.load(MODELS_DIR / "mlp.pkl")
+scaler = joblib.load(MODELS_DIR / "scaler.pkl")
 feature_cols = joblib.load(MODELS_DIR / "feature_cols.pkl")
 
 # ======================
@@ -163,6 +167,12 @@ def final_decision(req: FinalRequest):
     predicted_time = float(lgbm_reg.predict(X)[0])
     risk_prob = float(lgbm_clf.predict_proba(X)[0][1])
 
+    # Premium estimate from all available models
+    premium_xgb = float(xgb_premium.predict(X)[0])
+    premium_rf = float(rf_model.predict(X)[0])
+    premium_mlp = float(mlp_model.predict(scaler.transform(X))[0])
+    premium_ensemble = float(np.mean([premium_xgb, premium_rf, premium_mlp]))
+
     # ======================
     # FRAUD DETECTION - THREE COMPONENTS
     # ======================
@@ -183,6 +193,13 @@ def final_decision(req: FinalRequest):
     fraud_score = (0.4 * fraud_score_iso + 0.3 * fraud_score_rule + 0.3 * fraud_score_xgb)
     fraud_score = min(fraud_score, 100)
 
+    premium_breakdown = {
+        "xgb": premium_xgb,
+        "rf": premium_rf,
+        "mlp": premium_mlp,
+        "ensemble": premium_ensemble
+    }
+
     # ======================
     # FINAL DECISION
     # ======================
@@ -200,6 +217,12 @@ def final_decision(req: FinalRequest):
             "delivery_time": round(predicted_time, 2),
             "delay_probability": round(risk_prob, 3),
             "risk_level": get_risk_level(risk_prob)
+        },
+        "premium": {
+            "xgb": premium_xgb,
+            "rf": premium_rf,
+            "mlp": premium_mlp,
+            "ensemble": premium_ensemble
         },
         "fraud": {
             "fraud_score": fraud_score
