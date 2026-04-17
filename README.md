@@ -1289,4 +1289,12 @@ The video covers our persona research, the ShieldRun concept, the weekly premium
 
 ---
 
+## 🎬 Phase 3 Pitch Deck
+
+> 📊 https://gemini.google.com/share/204895dc0ad2
+
+This is the **pitch deck of our project — ShieldRun**, showcasing the problem, solution, system architecture, and key components of our AI-powered income protection system for gig workers.
+
+---
+
 *Built for Guidewire DEVTrails 2026 — Seed. Scale. Soar.*
