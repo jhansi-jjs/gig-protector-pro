@@ -1292,6 +1292,7 @@ The video covers our persona research, the ShieldRun concept, the weekly premium
 ## 🎬 Phase 3 Pitch Deck
 
 > https://docs.google.com/presentation/d/1AJ0nKl9kiSXLrdSeG9TPAyJoD3HoUfcL/edit?usp=sharing&ouid=112596573293366106290&rtpof=true&sd=true
+
 This is the **pitch deck of our project — ShieldRun**, showcasing the problem, solution, system architecture, and key components of our AI-powered income protection system for gig workers.
 
 ---
